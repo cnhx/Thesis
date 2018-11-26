@@ -40,7 +40,7 @@ repo_reviews <-as.data.frame(repo_reviews)
 dfsteamrepo <-data.frame()
 rawReviews <-data.frame()
 num = 20
-while(num<=1000000){  #Set limit
+while(num<=500000){  #Set limit
         repos<- fromJSON(paste0(url_steam,'/',appid,'?json=1?offset=',num))
         cat("Offset now is", num)
         cat("\n")
