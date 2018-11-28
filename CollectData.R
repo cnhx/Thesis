@@ -57,4 +57,6 @@ while(num<=500000){  #Set limit
 write.table(rawReviews,"./rawData.txt", sep="\t")
 
 
-
+library(gutenbergr)
+titles <- c("Twenty Thousand Leagues under the sea", "The War of the Worlds", "Pride and Prejudice", "Great Expectations")
+books <- gutenberg_works(title %in% titles) %>% gutenberg_download(meta_fields = "title")

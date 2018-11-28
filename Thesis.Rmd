@@ -68,7 +68,7 @@ while(num<=500000){  #Set limit
         # dfsteamrepo <- c(dfsteamrepo,steamrepo$reviews) 
         rownames(repos$reviews) <-make.names(c((num-19):num),unique = TRUE) #Try to solve dumplicate row name issue
         rownames(repos$reviews$author)<-make.names(c((num-19):num),unique = TRUE)
-        rawReviews<- rbind(rawReviews,repos$reviews)
+        rawData<- rbind(rawData,repos$reviews)
         num <- num + 20
 }
 
@@ -77,18 +77,113 @@ write.table(rawReviews,"./Data/rawData.txt", sep="\t")
 
 ```
 
-Subset the reviews from the rawData
+Read the data into memories
 
 ```{r}
-rawData <- read.table("./Data/rawData.txt", sep ="\t")
+if(is.nan(rawData)){
+rawData <- read.table("./Data/rawData.txt", sep ="\t") ##Read the raw data into memory
+}
 head(rawData)
 ```
 
+Check what are the language options in the rawData
+```{r}
+levels(rawData$language)
+```
+
+Since there is only one language option, I can subset the reviews directly from the rawData
+```{r}
+rawReviews <- subset(rawData,select=c(author.steamid,review))
+```
 
 ## Data Preprocessing
+Transfer rawReview$review from Factor type to characters
+```{r}
+rawReviews<- data.frame(lapply(rawReviews, as.character), stringsAsFactors=FALSE)
+```
 
-## Data Analyze
+Split the reviews into Tidy Text Data, 
+```{r}
+library(stringr)
+library(tidytext)
+
+by_word <- rawReviews %>% unnest_tokens(word,review)
+
+
+```
+Count and sort the words
+```{r}
+word_counts <- by_word %>% anti_join(stop_words) %>% count(author.steamid,word,sort=TRUE) %>% ungroup()
+word_counts
+```
+
+
+## Baisc Data Analyze
 
 ## Topic Modeling Analysis
+Convert words to DocumentTermMatrix type
+```{r}
+review_dtm<-word_counts %>% cast_dtm(author.steamid,word,n)
+review_dtm
+```
+
+Construct LDA model, set number of topics to 115 since there are 115 heros currently available in dota 2
+```{r}
+library(tm)
+library(topicmodels)
+review_lda <- LDA(review_dtm, k=115,control = list(seed=1234))
+review_lda
+```
+Examine per-topic-per-word probabilities
+```{r}
+review_topics <- tidy(review_lda, matrix = "beta")
+review_topics
+```
+In current setting, the result is too fragement and can not generate usable topics for further anlaysis.
+
+Show top 5 terms within each topic
+```{r}
+top_terms <-review_topics %>% group_by(topic) %>% top_n(5, beta) %>% ungroup() %>% arrange(topic, -beta)
+top_terms
+```
+
 
 ## Result Visulization 
+Visualize the top words by frequency
+```{r}
+library(ggplot2)
+top_terms %>%
+        mutate(term = reorder(term, beta)) %>%
+        ggplot(aes(term,beta,fill = factor(topic))) +
+        geom_col(show.legend = FALSE) +
+        ##facet_wrap(~ topic, scales = "fixed") +
+        coord_flip()
+```
+Word Frequency among the topics:
+```{r}
+library(tidyr)
+frequency <- word_counts %>% group_by(author.steamid) %>% mutate(proportion = word_counts$n / count(word_counts$n)) %>% select(-n) %>% spread(author.steamid,proportion) %>% 
+        gather(author.steamid, proportion)
+
+frequency
+
+library(scales)
+
+ggplot(frequency, aes(x=proportion))+
+        geom_abline(color = "gray40", lty =2)+
+        geom_jitter(alpha = 0.1, size =2.5, width = 0.3, height = 0.3) +
+        geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+        scale_x_log10(labels = percent_format())+
+        scale_y_log10(labels = percent_format())+
+        scale_color_gradient(limits = c(0,0.001), low = "darkslategray4", high = "gray 75")+
+        ##facet_wrap(~author.steamid, ncol = 2)+
+        theme(legend.position = "none") +
+        labs(y = "xxxxx", x = NULL)
+```
+Word Cloud with top 200 words
+```{r}
+library(wordcloud)
+
+word_counts %>% with(wordcloud(word,n,max.words = 200))
+```
+
